@@ -1,12 +1,11 @@
 package robot
 
 import (
-	"github.com/stianeikeland/go-rpio/v4"
-	"periph.io/x/conn/v3/i2c"
+	"github.com/arslab/robot_controller/models/"
 )
 
 type Robot struct {
-	GPIOPin  rpio.Pin
-	Device   i2c.Dev
-	Location Position
+	Connection Connection
+	Position   models.Position
+	Speed      int16
 }
