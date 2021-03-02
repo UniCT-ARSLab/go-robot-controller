@@ -16,6 +16,7 @@ import (
 	"periph.io/x/host/v3"
 )
 
+//Connection is the interface between the logical Robot and the i2C Bus
 type Connection struct {
 	GPIONumPin int
 	GPIOPin    rpio.Pin
@@ -24,6 +25,7 @@ type Connection struct {
 	Speed      int16
 }
 
+//NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
 func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
 
 	connect := Connection{
@@ -36,6 +38,7 @@ func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
 	return &connect
 }
 
+//Init initialise the I2C connection
 func (conn *Connection) Init() error {
 	host.Init()
 	if _, err := driverreg.Init(); err != nil {
@@ -63,6 +66,7 @@ func (conn *Connection) Init() error {
 	return nil
 }
 
+//Reset resets the I2C device
 func (conn *Connection) Reset() {
 	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Resetting the connection...")
 	conn.GPIOPin.Low()
@@ -72,6 +76,7 @@ func (conn *Connection) Reset() {
 	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Resetted")
 }
 
+//SendData allows to send data through the bus
 func (conn *Connection) SendData(payload interface{}, register byte) error {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, payload)
@@ -89,6 +94,7 @@ func (conn *Connection) SendData(payload interface{}, register byte) error {
 	return nil
 }
 
+//ReceiveData allows to read a register from device
 func (conn *Connection) ReceiveData(read []byte, register byte) error {
 	write := []byte{register}
 	if err := conn.Device.Tx(write, read); err != nil {
@@ -98,6 +104,7 @@ func (conn *Connection) ReceiveData(read []byte, register byte) error {
 	return nil
 }
 
+//SendReceiveData allows to send and receive a response
 func (conn *Connection) SendReceiveData(payload interface{}, read []byte, register byte) error {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, payload)
