@@ -1,10 +1,11 @@
 package robot
 
 import (
-	"fmt"
+	"bytes"
+	"encoding/binary"
 	"log"
-	"os"
 	"strconv"
+	"time"
 
 	"github.com/arslab/robot_controller/utilities"
 	"github.com/fatih/color"
@@ -16,40 +17,101 @@ import (
 )
 
 type Connection struct {
-	GPIOPin rpio.Pin
-	Device  i2c.Dev
-	Speed   int16
+	GPIONumPin int
+	GPIOPin    rpio.Pin
+	I2CAddress uint16
+	Device     i2c.Dev
+	Speed      int16
 }
 
-func NewConnection(gpioPIN uint16, i2cAddress uint16) *Connection {
-
-	host.Init()
-	if _, err := driverreg.Init(); err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-
-	//open i2c
-	b, erri2c := i2creg.Open("")
-	if erri2c != nil {
-		log.Fatal(erri2c)
-		os.Exit(1)
-	}
-	//creo un "device" i2c usando il bus "b" (/etc/i2c)
-	device := i2c.Dev{Addr: i2cAddress, Bus: b}
+func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
 
 	connect := Connection{
-		GPIOPin: rpio.Pin(gpioPIN),
-		Device:  device,
+		GPIONumPin: gpioPIN,
+		GPIOPin:    rpio.Pin(gpioPIN),
+		I2CAddress: i2cAddress,
+		//Device:     device,
 	}
 
 	return &connect
-
 }
 
-func (conn *Connection) Init() {
+func (conn *Connection) Init() error {
+	host.Init()
+	if _, err := driverreg.Init(); err != nil {
+		return err
+	}
+
 	conn.GPIOPin.Output()
 	conn.GPIOPin.High()
-	fmt.Println("Board initialised")
-	log.Printf("[%s] %s", utilities.CreateColorString("Web Panel", color.FgHiCyan), "avaiable on port:"+strconv.Itoa(ws.Port))
+
+	host.Init()
+	if _, err := driverreg.Init(); err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		return err
+	}
+
+	b, erri2c := i2creg.Open("")
+	if erri2c != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), erri2c)
+		return erri2c
+	}
+
+	conn.Device = i2c.Dev{Addr: conn.I2CAddress, Bus: b}
+
+	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Initialised on GPIO Pin :"+strconv.Itoa(conn.GPIONumPin))
+	return nil
+}
+
+func (conn *Connection) Reset() {
+	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Resetting the connection...")
+	conn.GPIOPin.Low()
+	time.Sleep(time.Millisecond * 100)
+	conn.GPIOPin.High()
+	time.Sleep(time.Second * 2)
+	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Resetted")
+}
+
+func (conn *Connection) SendData(payload interface{}, register byte) error {
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, payload)
+	if err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		return err
+	}
+
+	write := append([]byte{register}, buf.Bytes()...)
+
+	if err := conn.Device.Tx(write, nil); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (conn *Connection) ReceiveData(read []byte, register byte) error {
+	write := []byte{register}
+	if err := conn.Device.Tx(write, read); err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		return err
+	}
+	return nil
+}
+
+func (conn *Connection) SendReceiveData(payload interface{}, read []byte, register byte) error {
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, payload)
+	if err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		return err
+	}
+
+	write := append([]byte{register}, buf.Bytes()...)
+
+	if err := conn.Device.Tx(write, read); err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		return err
+	}
+
+	return nil
 }
