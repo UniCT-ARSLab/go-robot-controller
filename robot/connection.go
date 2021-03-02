@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"log"
+	"os"
 	"strconv"
 	"time"
 
@@ -23,10 +24,17 @@ type Connection struct {
 	I2CAddress uint16
 	Device     i2c.Dev
 	Speed      int16
+	Queue      [][]byte
 }
 
 //NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
 func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
+
+	err := rpio.Open()
+	if err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		os.Exit(1)
+	}
 
 	connect := Connection{
 		GPIONumPin: gpioPIN,
@@ -40,10 +48,6 @@ func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
 
 //Init initialise the I2C connection
 func (conn *Connection) Init() error {
-	host.Init()
-	if _, err := driverreg.Init(); err != nil {
-		return err
-	}
 
 	conn.GPIOPin.Output()
 	conn.GPIOPin.High()
@@ -61,6 +65,16 @@ func (conn *Connection) Init() error {
 	}
 
 	conn.Device = i2c.Dev{Addr: conn.I2CAddress, Bus: b}
+
+	go func() {
+		for true {
+			//log.Printf("Queue: %d", len(conn.Queue))
+			err := conn.ManageQueue()
+			if err != nil {
+				log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+			}
+		}
+	}()
 
 	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Initialised on GPIO Pin :"+strconv.Itoa(conn.GPIONumPin))
 	return nil
@@ -82,15 +96,26 @@ func (conn *Connection) SendData(payload interface{}, register byte) error {
 	err := binary.Write(buf, binary.LittleEndian, payload)
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		conn.Reset()
 		return err
 	}
 
 	write := append([]byte{register}, buf.Bytes()...)
+	conn.Queue = append(conn.Queue, write)
 
-	if err := conn.Device.Tx(write, nil); err != nil {
-		return err
+	return nil
+}
+
+//ManageQueue manage the queue of commands
+func (conn *Connection) ManageQueue() error {
+	if len(conn.Queue) > 0 {
+		var toSend []byte
+		toSend, conn.Queue = conn.Queue[0], conn.Queue[1:]
+		if err := conn.Device.Tx(toSend, nil); err != nil {
+			return err
+		}
 	}
-
+	time.Sleep(200 * time.Millisecond)
 	return nil
 }
 
@@ -99,6 +124,7 @@ func (conn *Connection) ReceiveData(read []byte, register byte) error {
 	write := []byte{register}
 	if err := conn.Device.Tx(write, read); err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		conn.Reset()
 		return err
 	}
 	return nil
@@ -110,6 +136,7 @@ func (conn *Connection) SendReceiveData(payload interface{}, read []byte, regist
 	err := binary.Write(buf, binary.LittleEndian, payload)
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		conn.Reset()
 		return err
 	}
 
@@ -117,6 +144,7 @@ func (conn *Connection) SendReceiveData(payload interface{}, read []byte, regist
 
 	if err := conn.Device.Tx(write, read); err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
+		conn.Reset()
 		return err
 	}
 

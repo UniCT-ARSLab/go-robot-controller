@@ -7,7 +7,7 @@ build:
 build-ui:
 	@if [[ ! -e webserver/www/index.html ]]; then\
     	echo "Robot Controller - Need to do \"make build\" or similar build (for other platforms) before using GUI!" > webserver/www/index.html;\
-		exit 1
+		exit 1\
 	fi
 	@cd webserver && statik -src=www -f 1>/dev/null
 run:

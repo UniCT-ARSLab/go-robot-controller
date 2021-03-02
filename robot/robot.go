@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/arslab/robot_controller/models"
@@ -24,10 +26,11 @@ const (
 
 //Robot rappresents the logical Robot
 type Robot struct {
-	Connection Connection
-	Position   models.Position
-	Speed      int16
-	Stopped    bool
+	Connection        Connection
+	Position          models.Position
+	LastBoardPosition models.Position
+	Speed             int16
+	Stopped           bool
 }
 
 //NewRobot return a new Robot instance
@@ -36,10 +39,11 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 	conn := NewConnection(gpioPIN, i2cAddress)
 
 	robot := Robot{
-		Connection: *conn,
-		Position:   models.Position{X: 0, Y: 0, Angle: 0},
-		Speed:      0,
-		Stopped:    false,
+		Connection:        *conn,
+		Position:          models.Position{X: 0, Y: 0, Angle: 0},
+		Speed:             0,
+		LastBoardPosition: models.Position{X: 0, Y: 0, Angle: 0},
+		Stopped:           false,
 	}
 
 	if connError := robot.Connection.Init(); connError != nil {
@@ -63,6 +67,10 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 
 func printError(s string) {
 	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), s)
+}
+
+func printInfo(s string) {
+	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), s)
 }
 
 //GetPosition returns the position of the Robot
@@ -93,29 +101,45 @@ func (robot *Robot) UpdatePosition() error {
 	binary.Read(buf, binary.LittleEndian, &a)
 	a = a / 100.0
 
-	robot.Position.X = x
-	robot.Position.Y = y
-	robot.Position.Angle = a
+	robot.Position.X = (x - robot.LastBoardPosition.X) + (x - robot.Position.X)
+	robot.Position.Y = y - robot.LastBoardPosition.Y
+	robot.Position.Angle = a - robot.LastBoardPosition.Angle
 
+	fmt.Println("board:", x, "last:", robot.LastBoardPosition.X, "logical:", robot.Position.X)
+
+	//robot.Position.X = (robot.Position.X + x) - (robot.LastBoardPosition.X)
+	//robot.Position.Y = (robot.Position.Y + y) - (robot.LastBoardPosition.Y)
+	//robot.Position.Angle = (robot.Position.Angle + a) - (robot.LastBoardPosition.Angle)
+
+	//printInfo("Position updated")
 	return nil
 }
 
 //SetPosition set the position on the I2C board
 func (robot *Robot) SetPosition(p models.Position) error {
 
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_SET_POSITION,
-			Val1:    p.X,
-			Val2:    p.Y,
-			Val3:    p.Angle,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("SetPosition Error!")
-		return err
-	}
+	// if err := robot.Connection.SendData(
+	// 	models.I2CMessage{
+	// 		Command: REG_SET_POSITION,
+	// 		Val1:    p.X,
+	// 		Val2:    p.Y,
+	// 		Val3:    p.Angle,
+	// 		End:     0,
+	// 	},
+	// 	0x60); err != nil {
+	// 	printError("SetPosition Error!")
+	// 	return err
+	// }
 
+	robot.LastBoardPosition.X = robot.LastBoardPosition.X + robot.Position.X
+	robot.LastBoardPosition.Y = robot.LastBoardPosition.Y + robot.Position.Y
+	robot.LastBoardPosition.Angle = robot.LastBoardPosition.Angle + robot.Position.Angle
+
+	robot.Position.X = p.X
+	robot.Position.Y = p.Y
+	robot.Position.Angle = p.Angle
+
+	printInfo("Position changed")
 	return nil
 }
 
@@ -134,6 +158,7 @@ func (robot *Robot) SetSpeed(speed int16) error {
 		return err
 	}
 
+	printInfo("Speed setted at " + strconv.Itoa(int(speed)))
 	return nil
 }
 
@@ -157,6 +182,7 @@ func (robot *Robot) ForwardDistance(distance int16) error {
 		return err
 	}
 
+	printInfo("Moved by " + strconv.Itoa(int(distance)))
 	return nil
 }
 
@@ -180,7 +206,7 @@ func (robot *Robot) ForwardToPoint(x int16, y int16) error {
 		printError("ForwardToPoint Error!")
 		return err
 	}
-
+	printInfo("Moved to X:" + strconv.Itoa(int(x)) + " Y:" + strconv.Itoa(int(y)))
 	return nil
 }
 
