@@ -19,6 +19,15 @@ func main() {
 
 	webServer.Start()
 
+	// go func() {
+	// 	for true {
+	// 		time.Sleep(1 * time.Second)
+	// 		pos := robot.GetPosition()
+	// 		fmt.Println("Posizione 1:", pos)
+
+	// 	}
+	// }()
+
 	for true {
 		time.Sleep(1 * time.Second)
 	}
@@ -27,15 +36,6 @@ func main() {
 	// fmt.Println("Posizione:", pos)
 	// robot.SetSpeed(200)
 	// robot.ForwardDistance(100)
-
-	// go func() {
-	// 	for true {
-	// 		time.Sleep(1 * time.Second)
-	// 		pos = robot.GetPosition()
-	// 		fmt.Println("Posizione 1:", pos)
-
-	// 	}
-	// }()
 
 	// go func() {
 	// 	for true {

@@ -359,7 +359,7 @@ func NewMelodyWebSocket() *melody.Melody {
 					s.Write(message)
 					//log.Printf("[%s] %s", utilities.CreateColorString("WEB SOCKET", color.FgHiMagenta), "Position sent!")
 				}
-				time.Sleep(time.Microsecond * 100)
+				time.Sleep(time.Millisecond * 20)
 			}
 		}()
 	})

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"log"
+	"math"
 	"strconv"
 	"time"
 
@@ -26,6 +27,8 @@ const (
 //Robot rappresents the logical Robot
 type Robot struct {
 	Connection             Connection
+	StartPositionSetted    bool
+	StartPosition          models.Position
 	Position               models.Position // L
 	LastBoardPosition      models.Position // U
 	Speed                  int16
@@ -39,11 +42,12 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 	conn := NewConnection(gpioPIN, i2cAddress)
 
 	robot := Robot{
-		Connection:        *conn,
-		Position:          models.Position{X: 0, Y: 0, Angle: 0},
-		Speed:             0,
-		LastBoardPosition: models.Position{X: 0, Y: 0, Angle: 0},
-		Stopped:           false,
+		Connection:          *conn,
+		StartPositionSetted: false,
+		Position:            models.Position{X: 0, Y: 0, Angle: 0},
+		Speed:               0,
+		LastBoardPosition:   models.Position{X: 0, Y: 0, Angle: 0},
+		Stopped:             false,
 	}
 
 	if connError := robot.Connection.Init(); connError != nil {
@@ -61,7 +65,7 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 			time.Sleep(500 * time.Millisecond)
 		}
 	}()
-	robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
+	//robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
 	return &robot, nil
 }
 
@@ -106,19 +110,48 @@ func (robot *Robot) UpdatePosition() error {
 	binary.Read(buf, binary.LittleEndian, &a)
 	a = a / 100.0
 
-	robot.Position.X = (x - robot.LastBoardPosition.X) + robot.Position.X
-	robot.Position.Y = (y - robot.LastBoardPosition.Y) + robot.Position.Y
-	robot.Position.Angle = (a - robot.LastBoardPosition.Angle) + robot.Position.Angle
+	if !robot.StartPositionSetted {
+		robot.StartPositionSetted = true
+
+		robot.StartPosition = models.Position{
+			X:     x,
+			Y:     y,
+			Angle: a,
+		}
+		printInfo("Start Position: X: " + strconv.Itoa(int(robot.StartPosition.X)) + ", Y: " + strconv.Itoa(int(robot.StartPosition.Y)) + ", Angle: " + strconv.Itoa(int(robot.StartPosition.Angle)))
+
+	}
+
+	// robot.Position.X = (x - robot.LastBoardPosition.X) + robot.Position.X
+	// robot.Position.Y = (y - robot.LastBoardPosition.Y) + robot.Position.Y
+	// robot.Position.Angle = (a - robot.LastBoardPosition.Angle) + robot.Position.Angle
+
+	deltaX := (x - robot.StartPosition.X)
+	deltaY := (y - robot.StartPosition.Y)
+
+	radiands := float64(robot.StartPosition.Angle) * (math.Pi / 180)
 
 	robot.LastBoardPosition.X = x
 	robot.LastBoardPosition.Y = y
 	robot.LastBoardPosition.Angle = a
 
-	//fmt.Println("board:", x, "last:", robot.LastBoardPosition.X, "logical:", robot.Position.X)
+	//println("dX", deltaX, "dY", deltaY)
 
-	//robot.Position.X = (robot.Position.X + x) - (robot.LastBoardPosition.X)
-	//robot.Position.Y = (robot.Position.Y + y) - (robot.LastBoardPosition.Y)
-	//robot.Position.Angle = (robot.Position.Angle + a) - (robot.LastBoardPosition.Angle)
+	newX := int16(float64(deltaX)*math.Cos(radiands) + float64(deltaY)*math.Sin(radiands))
+	newY := int16(float64(-deltaX)*math.Sin(radiands) + float64(deltaY)*math.Cos(radiands))
+	newA := a - robot.StartPosition.Angle
+
+	if newA < -180 {
+		newA = 360 + newA
+	} else if newA > 180 {
+		newA = 360 - newA
+	}
+
+	robot.Position.X = newX
+	robot.Position.Y = newY
+	robot.Position.Angle = newA
+
+	//println("LogicX:", robot.Position.X, "LogicY:", robot.Position.Y, "LogicAngle:", robot.Position.Angle)
 
 	//printInfo("Position updated")
 	if robot.CallbackPositionUpdate != nil {
@@ -142,6 +175,12 @@ func (robot *Robot) SetPosition(p models.Position) error {
 	// 	printError("SetPosition Error!")
 	// 	return err
 	// }
+
+	robot.StartPosition = models.Position{
+		X:     robot.LastBoardPosition.X + p.X,
+		Y:     robot.LastBoardPosition.Y + p.Y,
+		Angle: robot.LastBoardPosition.Angle + p.Angle,
+	}
 
 	robot.Position.X = p.X
 	robot.Position.Y = p.Y
