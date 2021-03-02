@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -109,7 +108,7 @@ func (robot *Robot) UpdatePosition() error {
 	robot.LastBoardPosition.Y = y
 	robot.LastBoardPosition.Angle = a
 
-	fmt.Println("board:", x, "last:", robot.LastBoardPosition.X, "logical:", robot.Position.X)
+	//fmt.Println("board:", x, "last:", robot.LastBoardPosition.X, "logical:", robot.Position.X)
 
 	//robot.Position.X = (robot.Position.X + x) - (robot.LastBoardPosition.X)
 	//robot.Position.Y = (robot.Position.Y + y) - (robot.LastBoardPosition.Y)
@@ -134,10 +133,6 @@ func (robot *Robot) SetPosition(p models.Position) error {
 	// 	printError("SetPosition Error!")
 	// 	return err
 	// }
-
-	// robot.LastBoardPosition.X = robot.LastBoardPosition.X + robot.Position.X
-	// robot.LastBoardPosition.Y = robot.LastBoardPosition.Y + robot.Position.Y
-	// robot.LastBoardPosition.Angle = robot.LastBoardPosition.Angle + robot.Position.Angle
 
 	robot.Position.X = p.X
 	robot.Position.Y = p.Y

@@ -31,14 +31,14 @@ func main() {
 		}
 	}()
 
-	go func() {
-		for true {
-			time.Sleep(4 * time.Second)
-			fmt.Println("RESET POSITION:")
-			robot.SetPosition(models.Position{X: 10, Y: 10, Angle: 0})
+	// go func() {
+	// 	for true {
+	// 		time.Sleep(4 * time.Second)
+	// 		fmt.Println("RESET POSITION:")
+	// 		robot.SetPosition(models.Position{X: 10, Y: 10, Angle: 0})
 
-		}
-	}()
+	// 	}
+	// }()
 
 	for true {
 		time.Sleep(1 * time.Second)

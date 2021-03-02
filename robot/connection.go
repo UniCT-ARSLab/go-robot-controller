@@ -115,7 +115,7 @@ func (conn *Connection) ManageQueue() error {
 			return err
 		}
 	}
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(20 * time.Millisecond)
 	return nil
 }
 
