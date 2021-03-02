@@ -25,11 +25,12 @@ const (
 
 //Robot rappresents the logical Robot
 type Robot struct {
-	Connection        Connection
-	Position          models.Position // L
-	LastBoardPosition models.Position // U
-	Speed             int16
-	Stopped           bool
+	Connection             Connection
+	Position               models.Position // L
+	LastBoardPosition      models.Position // U
+	Speed                  int16
+	Stopped                bool
+	CallbackPositionUpdate func(pos models.Position)
 }
 
 //NewRobot return a new Robot instance
@@ -57,10 +58,10 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 				robot.Connection.Reset()
 				robot.Stopped = false
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}()
-
+	robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
 	return &robot, nil
 }
 
@@ -70,6 +71,11 @@ func printError(s string) {
 
 func printInfo(s string) {
 	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), s)
+}
+
+//SetCallbackUpadetePosition set the callback position update function
+func (robot *Robot) SetCallbackUpadetePosition(cb func(position models.Position)) {
+	robot.CallbackPositionUpdate = cb
 }
 
 //GetPosition returns the position of the Robot
@@ -115,6 +121,9 @@ func (robot *Robot) UpdatePosition() error {
 	//robot.Position.Angle = (robot.Position.Angle + a) - (robot.LastBoardPosition.Angle)
 
 	//printInfo("Position updated")
+	if robot.CallbackPositionUpdate != nil {
+		robot.CallbackPositionUpdate(robot.Position)
+	}
 	return nil
 }
 
@@ -138,7 +147,7 @@ func (robot *Robot) SetPosition(p models.Position) error {
 	robot.Position.Y = p.Y
 	robot.Position.Angle = p.Angle
 
-	printInfo("Position changed")
+	log.Printf("[%s] %s : X: %d, Y: %d, Angle: %d", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Position changed", p.X, p.Y, p.Angle)
 	return nil
 }
 
@@ -156,7 +165,7 @@ func (robot *Robot) SetSpeed(speed int16) error {
 		printError("SetSpeed Error!")
 		return err
 	}
-
+	robot.Speed = speed
 	printInfo("Speed setted at " + strconv.Itoa(int(speed)))
 	return nil
 }
@@ -229,7 +238,7 @@ func (robot *Robot) RelativeRotation(degree int16) error {
 		printError("RelativeRotation Error!")
 		return err
 	}
-
+	printInfo("Relative Rotated by " + strconv.Itoa(int(degree)))
 	return nil
 }
 

@@ -1,12 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
-	"github.com/arslab/robot_controller/models"
 	"github.com/arslab/robot_controller/robot"
+	"github.com/arslab/robot_controller/webserver"
 )
 
 func main() {
@@ -16,20 +15,27 @@ func main() {
 		os.Exit(1)
 	}
 
-	robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
-	pos := robot.GetPosition()
-	fmt.Println("Posizione:", pos)
-	robot.SetSpeed(200)
-	robot.ForwardDistance(100)
+	webServer := webserver.NewWebServer(robot, "0.0.0.0", 9998)
 
-	go func() {
-		for true {
-			time.Sleep(1 * time.Second)
-			pos = robot.GetPosition()
-			fmt.Println("Posizione 1:", pos)
+	webServer.Start()
 
-		}
-	}()
+	for true {
+		time.Sleep(1 * time.Second)
+	}
+
+	// pos := robot.GetPosition()
+	// fmt.Println("Posizione:", pos)
+	// robot.SetSpeed(200)
+	// robot.ForwardDistance(100)
+
+	// go func() {
+	// 	for true {
+	// 		time.Sleep(1 * time.Second)
+	// 		pos = robot.GetPosition()
+	// 		fmt.Println("Posizione 1:", pos)
+
+	// 	}
+	// }()
 
 	// go func() {
 	// 	for true {
@@ -39,9 +45,5 @@ func main() {
 
 	// 	}
 	// }()
-
-	for true {
-		time.Sleep(1 * time.Second)
-	}
 
 }
