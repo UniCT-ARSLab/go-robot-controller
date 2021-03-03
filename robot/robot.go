@@ -27,8 +27,8 @@ const (
 //Robot rappresents the logical Robot
 type Robot struct {
 	Connection        Connection
-	Position          models.Position
-	LastBoardPosition models.Position
+	Position          models.Position // L
+	LastBoardPosition models.Position // U
 	Speed             int16
 	Stopped           bool
 }
@@ -101,9 +101,13 @@ func (robot *Robot) UpdatePosition() error {
 	binary.Read(buf, binary.LittleEndian, &a)
 	a = a / 100.0
 
-	robot.Position.X = (x - robot.LastBoardPosition.X) + (x - robot.Position.X)
-	robot.Position.Y = y - robot.LastBoardPosition.Y
-	robot.Position.Angle = a - robot.LastBoardPosition.Angle
+	robot.Position.X = (x - robot.LastBoardPosition.X) + robot.Position.X
+	robot.Position.Y = (y - robot.LastBoardPosition.Y) + robot.Position.Y
+	robot.Position.Angle = (a - robot.LastBoardPosition.Angle) + robot.Position.Angle
+
+	robot.LastBoardPosition.X = x
+	robot.LastBoardPosition.Y = y
+	robot.LastBoardPosition.Angle = a
 
 	fmt.Println("board:", x, "last:", robot.LastBoardPosition.X, "logical:", robot.Position.X)
 
@@ -131,9 +135,9 @@ func (robot *Robot) SetPosition(p models.Position) error {
 	// 	return err
 	// }
 
-	robot.LastBoardPosition.X = robot.LastBoardPosition.X + robot.Position.X
-	robot.LastBoardPosition.Y = robot.LastBoardPosition.Y + robot.Position.Y
-	robot.LastBoardPosition.Angle = robot.LastBoardPosition.Angle + robot.Position.Angle
+	// robot.LastBoardPosition.X = robot.LastBoardPosition.X + robot.Position.X
+	// robot.LastBoardPosition.Y = robot.LastBoardPosition.Y + robot.Position.Y
+	// robot.LastBoardPosition.Angle = robot.LastBoardPosition.Angle + robot.Position.Angle
 
 	robot.Position.X = p.X
 	robot.Position.Y = p.Y
