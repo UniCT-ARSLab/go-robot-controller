@@ -16,4 +16,5 @@ install-dep:
 	@go get -u github.com/rakyll/statik
 	@mkdir -p bin
 	@mkdir -p "webserver/www"
+	@touch webserver/www/index.html
 	@go get -u -v all
