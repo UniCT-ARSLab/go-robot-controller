@@ -35,3 +35,11 @@ In this directory is defined the <code>webserver</code> struct and its functions
 
 ## Utilities
 Some struct and fuctions created as utilities.
+
+# TODOs
+<ul>
+<li>Allowing the run of the service with a virtual robot instance.</li>
+<li>Fix the <code>set_position</code> operation in the robot struct.</li>
+<li>Create a WebUI to send and controll the local robot instance.</li>
+<li>Other...</li>
+</ul>
