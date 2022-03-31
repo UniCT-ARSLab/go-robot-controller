@@ -1,12 +1,12 @@
 # RobotController (Service) by ARSLab
 
-This is a service for monitoring and controlling robotic systems. It is based mainly on I2C communication to send commands or read information directly from the robot unit control. The service also provides a series of HTTP Rest API with which to execute the same commands and a Websocket (pure or via Socketio) with which to interact in realtime with the robot.
+This is a service for monitoring and controlling robotic systems. It is based mainly on CAN communication to send commands or read information directly from the robot unit control. The service also provides a series of HTTP Rest API with which to execute the same commands and a Websocket (pure or via Socketio) with which to interact in realtime with the robot.
 
 ## Requirements
-The service is written in GoLang version 1.15, then to be compiled you must have almost this version installed in your machine.
+The service is written in GoLang version >=1.15, then to be compiled you must have almost this version installed in your machine.
 
 ## Tests
-The service was tested into a Raspberry PI 3 with Raspian (debian linux based) with a I2C board which is used to communicate with the robot system.
+The service was tested into a Raspberry PI 3 with Raspian (debian linux based) with a CAN board which is used to communicate with the robot system.
 In addition, the service was used to develop a useful tool to display and interact with the robot in a virtual environment.
 
 ## Installation

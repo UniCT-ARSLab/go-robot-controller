@@ -85,6 +85,8 @@ func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	apiGroup.POST("/robot/rotate/relative", func(context *gin.Context) { robotRelativeRotation(context) })
 	apiGroup.POST("/robot/rotate/absolute", func(context *gin.Context) { robotAbsoluteRotation(context) })
 
+	apiGroup.POST("/robot/motors/stop", func(context *gin.Context) { sendStop(context) })
+
 	//apiGroup.GET("/system", func(context *gin.Context) { getSystemInformation(context) })
 
 	router.GET("/socket.io/*any", gin.WrapH(serverSocket))
@@ -112,7 +114,7 @@ func (ws *WebServer) Start() {
 
 	go func() {
 		for {
-			//	ws.listenInputChannel()
+			//ws.listenInputChannel()
 		}
 	}()
 }
@@ -195,6 +197,12 @@ func setRobotPosition(context *gin.Context) {
 	}
 }
 
+func sendStop(context *gin.Context) {
+
+	robotInstance.StopMotors()
+	context.JSON(http.StatusOK, gin.H{"error": false})
+}
+
 func getRobotSpeed(context *gin.Context) {
 
 	speed := robotInstance.Speed
@@ -202,7 +210,6 @@ func getRobotSpeed(context *gin.Context) {
 }
 
 func setRobotSpeed(context *gin.Context) {
-
 	var json map[string]int16
 	//value, _ := c.Request.GetBody()
 	//fmt.Print(value)
@@ -305,10 +312,7 @@ func robotAbsoluteRotation(context *gin.Context) {
 
 func newServerSocket() *socketio.Server {
 
-	serverSocket, err := socketio.NewServer(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	serverSocket := socketio.NewServer(nil)
 
 	serverSocket.OnConnect("/", func(s socketio.Conn) error {
 		s.Join("robot_controller")

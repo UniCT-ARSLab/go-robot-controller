@@ -1,150 +1,142 @@
 package robot
 
 import (
+	//"bytes"
+	//"encoding/binary"
+
 	"bytes"
 	"encoding/binary"
 	"log"
 	"os"
-	"strconv"
-	"time"
+	"os/signal"
+
+	//"time"
 
 	"github.com/arslab/robot_controller/utilities"
+	"github.com/brutella/can"
 	"github.com/fatih/color"
-	"github.com/stianeikeland/go-rpio/v4"
-	"periph.io/x/conn/v3/driver/driverreg"
-	"periph.io/x/conn/v3/i2c"
-	"periph.io/x/conn/v3/i2c/i2creg"
-	"periph.io/x/host/v3"
 )
 
 //Connection is the interface between the logical Robot and the i2C Bus
 type Connection struct {
-	GPIONumPin int
-	GPIOPin    rpio.Pin
-	I2CAddress uint16
-	Device     i2c.Dev
-	Speed      int16
-	Queue      [][]byte
+	Interface string
+	Bus       *can.Bus
+	OnReceive func(data can.Frame)
 }
 
-//NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
-func NewConnection(gpioPIN int, i2cAddress uint16) *Connection {
+// func handleCANFrame(frm can.Frame) {
+// 	data := frm.Data[:] //trimSuffix(frm.Data[:], 0x00)
+// 	//length := fmt.Sprintf("[%x]", frm.Length)
 
-	err := rpio.Open()
+// 	log.Printf("%s : [%x], Length Data : %d\n", "ID", frm.ID, len(data))
+// 	if frm.ID == 0x3E3 {
+// 		//position
+// 		posX := data[0:1]
+// 		posY := data[2:3]
+// 		angle := data[4:5]
+// 		log.Printf("%s : [X : %d, Y : %d, A : %d]\n", "Position", posX, posY, angle)
+// 	}
+// 	if frm.ID == 0x3E7 {
+// 		wheel := data[0:1]
+// 		speed := data[2:3]
+// 		tSpeed := data[4:5]
+// 		log.Printf("%s : [Wheel : %d, Speed : %d, TargetSpeed : %d]\n", "Position", wheel, speed, tSpeed)
+// 	}
+
+// 	if frm.ID == 0x3E4 {
+// 		linearSpeed := data[0:3]
+// 		log.Printf("%s : [%d]\n", "Linear Speed", linearSpeed)
+// 	}
+
+// 	if frm.ID == 0x70F {
+// 		if len(data) > 0 {
+// 			obstacle := data[0]
+// 			validity := data[1]
+// 			angleStart := data[2:3]
+// 			angleEnd := data[4:5]
+// 			log.Printf("%s : [Obstacle : %d, Validity : %d, AngleStart : %d, AngleEnd : %d]\n", "Obstacle", obstacle, validity, angleStart, angleEnd)
+// 		} else {
+// 			log.Printf("%s : [No Obstacle]\n", "Obstacle")
+// 		}
+
+// 	}
+// 	//log.Printf("%-3s %-4x %-3s % -24X '%s'\n", "can0", frm.ID, length, data, printableString(data[:]))
+// }
+
+//NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
+func NewConnection(networkInterface string) *Connection {
+
+	bus, err := can.NewBusForInterfaceWithName(networkInterface)
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
 		os.Exit(1)
 	}
 
-	connect := Connection{
-		GPIONumPin: gpioPIN,
-		GPIOPin:    rpio.Pin(gpioPIN),
-		I2CAddress: i2cAddress,
-		//Device:     device,
+	connection := Connection{
+		Interface: networkInterface,
+		Bus:       bus,
 	}
 
-	return &connect
+	return &connection
 }
 
-//Init initialise the I2C connection
+func (conn *Connection) OnReceiveCallback(cb func(data can.Frame)) {
+	conn.OnReceive = cb
+	conn.Bus.SubscribeFunc(conn.OnReceive)
+}
+
+//Init initialise the CAN connection
 func (conn *Connection) Init() error {
 
-	conn.GPIOPin.Output()
-	conn.GPIOPin.High()
-
-	host.Init()
-	if _, err := driverreg.Init(); err != nil {
-		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		return err
-	}
-
-	b, erri2c := i2creg.Open("")
-	if erri2c != nil {
-		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), erri2c)
-		return erri2c
-	}
-
-	conn.Device = i2c.Dev{Addr: conn.I2CAddress, Bus: b}
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Kill)
 
 	go func() {
-		for true {
-			//log.Printf("Queue: %d", len(conn.Queue))
-			err := conn.ManageQueue()
-			if err != nil {
-				log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-			}
+
+		select {
+		case <-c:
+			conn.Bus.Disconnect()
+			os.Exit(1)
 		}
 	}()
 
-	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Initialised on GPIO Pin :"+strconv.Itoa(conn.GPIONumPin))
+	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Initialised on Interface:"+conn.Interface)
 	return nil
 }
 
-//Reset resets the I2C device
-func (conn *Connection) Reset() {
-	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Resetting the connection...")
-	conn.GPIOPin.Low()
-	time.Sleep(time.Millisecond * 100)
-	conn.GPIOPin.High()
-	time.Sleep(time.Second * 2)
-	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Resetted")
+func (conn *Connection) Connect() {
+	go func() {
+		conn.Bus.ConnectAndPublish()
+	}()
 }
 
 //SendData allows to send data through the bus
-func (conn *Connection) SendData(payload interface{}, register byte) error {
+func (conn *Connection) SendData(payload interface{}, id uint32) error {
+
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.LittleEndian, payload)
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		conn.Reset()
 		return err
 	}
+	err = nil
 
-	write := append([]byte{register}, buf.Bytes()...)
-	conn.Queue = append(conn.Queue, write)
-
-	return nil
-}
-
-//ManageQueue manage the queue of commands
-func (conn *Connection) ManageQueue() error {
-	if len(conn.Queue) > 0 {
-		var toSend []byte
-		toSend, conn.Queue = conn.Queue[0], conn.Queue[1:]
-		if err := conn.Device.Tx(toSend, nil); err != nil {
-			return err
-		}
+	var pl [8]uint8 // = buf.Bytes()
+	for i, v := range buf.Bytes() {
+		pl[i] = v
 	}
-	time.Sleep(20 * time.Millisecond)
-	return nil
-}
 
-//ReceiveData allows to read a register from device
-func (conn *Connection) ReceiveData(read []byte, register byte) error {
-	write := []byte{register}
-	if err := conn.Device.Tx(write, read); err != nil {
-		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		conn.Reset()
-		return err
+	//log.Println(pl)
+
+	frm := can.Frame{
+		Length: 8,
+		ID:     id,
+		Data:   pl,
 	}
-	return nil
-}
-
-//SendReceiveData allows to send and receive a response
-func (conn *Connection) SendReceiveData(payload interface{}, read []byte, register byte) error {
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, payload)
+	err = conn.Bus.Publish(frm)
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		conn.Reset()
-		return err
-	}
-
-	write := append([]byte{register}, buf.Bytes()...)
-
-	if err := conn.Device.Tx(write, read); err != nil {
-		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		conn.Reset()
 		return err
 	}
 

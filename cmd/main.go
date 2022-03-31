@@ -1,8 +1,13 @@
 package main
 
 import (
+	//"os"
+
 	"os"
+	"os/signal"
 	"time"
+
+	//"github.com/arslab/robot_controller/robot"
 
 	"github.com/arslab/robot_controller/robot"
 	"github.com/arslab/robot_controller/webserver"
@@ -10,7 +15,11 @@ import (
 
 func main() {
 
-	robot, err := robot.NewRobot(4, 0x34)
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt)
+	signal.Notify(c, os.Kill)
+
+	robot, err := robot.NewRobot("can0")
 	if err != nil {
 		os.Exit(1)
 	}

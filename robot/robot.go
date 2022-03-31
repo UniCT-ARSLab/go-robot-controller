@@ -3,25 +3,29 @@ package robot
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"log"
-	"math"
-	"strconv"
-	"time"
 
 	"github.com/arslab/robot_controller/models"
 	"github.com/arslab/robot_controller/utilities"
+	"github.com/brutella/can"
 	"github.com/fatih/color"
 )
 
+const DEBUG_CAN = false
+
 const (
-	REG_GET_POSITION = 0x01
-	REG_SET_POSITION = 0x84
-	REG_SET_SPEED    = 0x8c
-	REG_FW_DISTANCE  = 0x85
-	REG_FW_POINT     = 0x85
-	REG_REL_ROTATION = 0x88
-	REG_ABS_ROTATION = 0x89
+	ID_ROBOT_POSITION       = 0x3E3
+	ID_OTHER_ROBOT_POSITION = 0x3E5
+	ID_ROBOT_SPEED          = 0x3E4
+	ID_ROBOT_STATUS         = 0x402
+	ID_MOTION_CMD           = 0x7F0
+	ID_ST_CMD               = 0x710
+	ID_OBST_MAP             = 0x70f
+)
+
+const (
+	ST_CMD_ALIGN_PICCOLO = 0x03
+	ST_CMD_ALIGN_GRANDE  = 0x01
 )
 
 //Robot rappresents the logical Robot
@@ -29,24 +33,23 @@ type Robot struct {
 	Connection             Connection
 	StartPositionSetted    bool
 	StartPosition          models.Position
-	Position               models.Position // L
-	LastBoardPosition      models.Position // U
+	Position               models.Position
 	Speed                  int16
 	Stopped                bool
 	CallbackPositionUpdate func(pos models.Position)
 }
 
 //NewRobot return a new Robot instance
-func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
+func NewRobot(networkInterface string) (*Robot, error) {
 
-	conn := NewConnection(gpioPIN, i2cAddress)
+	conn := NewConnection(networkInterface)
 
 	robot := Robot{
 		Connection:          *conn,
 		StartPositionSetted: false,
 		Position:            models.Position{X: 0, Y: 0, Angle: 0},
+		StartPosition:       models.Position{X: -1000, Y: -1000, Angle: -1000},
 		Speed:               0,
-		LastBoardPosition:   models.Position{X: 0, Y: 0, Angle: 0},
 		Stopped:             false,
 	}
 
@@ -55,18 +58,87 @@ func NewRobot(gpioPIN int, i2cAddress uint16) (*Robot, error) {
 		return nil, connError
 	}
 
+	robot.Connection.OnReceiveCallback(robot.onDataReceived)
+
 	go func() {
-		for true {
-			if err := robot.UpdatePosition(); err != nil {
-				robot.Stopped = true
-				robot.Connection.Reset()
-				robot.Stopped = false
-			}
-			time.Sleep(500 * time.Millisecond)
-		}
+		robot.Connection.Connect()
 	}()
+
 	//robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
 	return &robot, nil
+}
+
+func (robot *Robot) onDataReceived(frm can.Frame) {
+	data := frm.Data[:]
+
+	switch frm.ID {
+	case ID_ROBOT_POSITION:
+		//position
+
+		var posX int16
+		var posY int16
+		var angle int16
+
+		buf := bytes.NewBuffer(data[:2])
+		binary.Read(buf, binary.LittleEndian, &posX)
+		buf = bytes.NewBuffer(data[2:4])
+		binary.Read(buf, binary.LittleEndian, &posY)
+		buf = bytes.NewBuffer(data[4:6])
+		binary.Read(buf, binary.LittleEndian, &angle)
+		angle = angle / 100.0
+
+		if robot.StartPosition.X < -999 {
+			robot.StartPosition.X = posX
+			robot.StartPosition.Y = posY
+			robot.StartPosition.Angle = angle
+		}
+
+		robot.Position.X = posX
+		robot.Position.Y = posY
+		robot.Position.Angle = angle
+		if DEBUG_CAN {
+			log.Printf("%s : [X : %d, Y : %d, A : %d]\n", "Position", posX, posY, angle)
+		}
+	case ID_ROBOT_SPEED:
+		var speed int16
+		buf := bytes.NewBuffer(data[:4])
+		binary.Read(buf, binary.LittleEndian, &speed)
+		robot.Speed = speed
+		if DEBUG_CAN {
+			log.Printf("%s : [%d]\n", "Linear Speed", speed)
+		}
+	case ID_ROBOT_STATUS:
+		var status int16
+		buf := bytes.NewBuffer(data[2:4])
+		binary.Read(buf, binary.LittleEndian, &status)
+		if DEBUG_CAN {
+			log.Printf("%s : [%d]\n", "Status", status)
+		}
+	case ID_OBST_MAP:
+		var obstacle_number uint8
+		var valid uint8
+		var angleStart int16
+		var angleEnd int16
+		var distance int16
+
+		buf := bytes.NewBuffer(data[:1])
+		binary.Read(buf, binary.LittleEndian, &obstacle_number)
+		buf = bytes.NewBuffer(data[1:2])
+		binary.Read(buf, binary.LittleEndian, &valid)
+		buf = bytes.NewBuffer(data[2:4])
+		binary.Read(buf, binary.LittleEndian, &angleStart)
+		buf = bytes.NewBuffer(data[4:6])
+		binary.Read(buf, binary.LittleEndian, &angleEnd)
+		buf = bytes.NewBuffer(data[6:8])
+		binary.Read(buf, binary.LittleEndian, &distance)
+		if DEBUG_CAN {
+			log.Printf("%s : Number: [%d], Valid: [%d], AStart: [%d], AEnd: [%d], Distance: [%d]\n", "Obstacle map", obstacle_number, valid, angleStart, angleEnd, distance)
+		}
+
+	default:
+		log.Printf("%s : [%x]\n", "UNKNOWN ID CAN", frm.ID)
+	}
+
 }
 
 func printError(s string) {
@@ -88,219 +160,225 @@ func (robot *Robot) GetPosition() models.Position {
 	return robot.Position
 }
 
-//UpdatePosition logical position from I2C board
-func (robot *Robot) UpdatePosition() error {
+// //UpdatePosition logical position from I2C board
+// func (robot *Robot) UpdatePosition() error {
 
-	read := make([]byte, 6)
-	if err := robot.Connection.ReceiveData(read, REG_GET_POSITION); err != nil {
-		printError("UpdatePosition Error!")
-		return err
-	}
-	//numBytes := []byte{read[0], read[1]}
-	var x int16
-	buf := bytes.NewBuffer(read[:2])
-	binary.Read(buf, binary.LittleEndian, &x)
+// 	read := make([]byte, 6)
+// 	if err := robot.Connection.ReceiveData(read, REG_GET_POSITION); err != nil {
+// 		printError("UpdatePosition Error!")
+// 		return err
+// 	}
+// 	//numBytes := []byte{read[0], read[1]}
+// 	var x int16
+// 	buf := bytes.NewBuffer(read[:2])
+// 	binary.Read(buf, binary.LittleEndian, &x)
 
-	var y int16
-	buf = bytes.NewBuffer(read[2:4])
-	binary.Read(buf, binary.LittleEndian, &y)
+// 	var y int16
+// 	buf = bytes.NewBuffer(read[2:4])
+// 	binary.Read(buf, binary.LittleEndian, &y)
 
-	var a int16
-	buf = bytes.NewBuffer(read[4:6])
-	binary.Read(buf, binary.LittleEndian, &a)
-	a = a / 100.0
+// 	var a int16
+// 	buf = bytes.NewBuffer(read[4:6])
+// 	binary.Read(buf, binary.LittleEndian, &a)
+// 	a = a / 100.0
 
-	if !robot.StartPositionSetted {
-		robot.StartPositionSetted = true
+// 	if !robot.StartPositionSetted {
+// 		robot.StartPositionSetted = true
 
-		robot.StartPosition = models.Position{
-			X:     x,
-			Y:     y,
-			Angle: a,
-		}
-		printInfo("Start Position: X: " + strconv.Itoa(int(robot.StartPosition.X)) + ", Y: " + strconv.Itoa(int(robot.StartPosition.Y)) + ", Angle: " + strconv.Itoa(int(robot.StartPosition.Angle)))
+// 		robot.StartPosition = models.Position{
+// 			X:     x,
+// 			Y:     y,
+// 			Angle: a,
+// 		}
+// 		printInfo("Start Position: X: " + strconv.Itoa(int(robot.StartPosition.X)) + ", Y: " + strconv.Itoa(int(robot.StartPosition.Y)) + ", Angle: " + strconv.Itoa(int(robot.StartPosition.Angle)))
 
-	}
+// 	}
 
-	// robot.Position.X = (x - robot.LastBoardPosition.X) + robot.Position.X
-	// robot.Position.Y = (y - robot.LastBoardPosition.Y) + robot.Position.Y
-	// robot.Position.Angle = (a - robot.LastBoardPosition.Angle) + robot.Position.Angle
+// 	// robot.Position.X = (x - robot.LastBoardPosition.X) + robot.Position.X
+// 	// robot.Position.Y = (y - robot.LastBoardPosition.Y) + robot.Position.Y
+// 	// robot.Position.Angle = (a - robot.LastBoardPosition.Angle) + robot.Position.Angle
 
-	deltaX := (x - robot.StartPosition.X)
-	deltaY := (y - robot.StartPosition.Y)
+// 	deltaX := (x - robot.StartPosition.X)
+// 	deltaY := (y - robot.StartPosition.Y)
 
-	radiands := float64(robot.StartPosition.Angle) * (math.Pi / 180)
+// 	radiands := float64(robot.StartPosition.Angle) * (math.Pi / 180)
 
-	robot.LastBoardPosition.X = x
-	robot.LastBoardPosition.Y = y
-	robot.LastBoardPosition.Angle = a
+// 	robot.LastBoardPosition.X = x
+// 	robot.LastBoardPosition.Y = y
+// 	robot.LastBoardPosition.Angle = a
 
-	//println("dX", deltaX, "dY", deltaY)
+// 	//println("dX", deltaX, "dY", deltaY)
 
-	newX := int16(float64(deltaX)*math.Cos(radiands) + float64(deltaY)*math.Sin(radiands))
-	newY := int16(float64(-deltaX)*math.Sin(radiands) + float64(deltaY)*math.Cos(radiands))
-	newA := a - robot.StartPosition.Angle
+// 	newX := int16(float64(deltaX)*math.Cos(radiands) + float64(deltaY)*math.Sin(radiands))
+// 	newY := int16(float64(-deltaX)*math.Sin(radiands) + float64(deltaY)*math.Cos(radiands))
+// 	newA := a - robot.StartPosition.Angle
 
-	if newA < -180 {
-		newA = 360 + newA
-	} else if newA > 180 {
-		newA = 360 - newA
-	}
+// 	if newA < -180 {
+// 		newA = 360 + newA
+// 	} else if newA > 180 {
+// 		newA = 360 - newA
+// 	}
 
-	robot.Position.X = newX
-	robot.Position.Y = newY
-	robot.Position.Angle = newA
+// 	robot.Position.X = newX
+// 	robot.Position.Y = newY
+// 	robot.Position.Angle = newA
 
-	//println("LogicX:", robot.Position.X, "LogicY:", robot.Position.Y, "LogicAngle:", robot.Position.Angle)
+// 	//println("LogicX:", robot.Position.X, "LogicY:", robot.Position.Y, "LogicAngle:", robot.Position.Angle)
 
-	//printInfo("Position updated")
-	if robot.CallbackPositionUpdate != nil {
-		robot.CallbackPositionUpdate(robot.Position)
-	}
-	return nil
-}
+// 	//printInfo("Position updated")
+// 	if robot.CallbackPositionUpdate != nil {
+// 		robot.CallbackPositionUpdate(robot.Position)
+// 	}
+// 	return nil
+// }
 
 //SetPosition set the position on the I2C board
 func (robot *Robot) SetPosition(p models.Position) error {
 
-	// if err := robot.Connection.SendData(
-	// 	models.I2CMessage{
-	// 		Command: REG_SET_POSITION,
-	// 		Val1:    p.X,
-	// 		Val2:    p.Y,
-	// 		Val3:    p.Angle,
-	// 		End:     0,
-	// 	},
-	// 	0x60); err != nil {
-	// 	printError("SetPosition Error!")
-	// 	return err
-	// }
-
-	robot.StartPosition = models.Position{
-		X:     robot.LastBoardPosition.X + p.X,
-		Y:     robot.LastBoardPosition.Y + p.Y,
-		Angle: robot.LastBoardPosition.Angle + p.Angle,
+	motionCMD := models.MotionCommand{
+		CMD:     models.MC_SET_POSITION,
+		PARAM_1: p.X,
+		PARAM_2: p.Y,
+		PARAM_3: p.Angle,
 	}
 
-	robot.Position.X = p.X
-	robot.Position.Y = p.Y
-	robot.Position.Angle = p.Angle
+	err := robot.Connection.SendData(motionCMD, ID_MOTION_CMD)
 
-	log.Printf("[%s] %s : X: %d, Y: %d, Angle: %d", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Position changed", p.X, p.Y, p.Angle)
-	return nil
+	if err == nil {
+		log.Printf("[%s] %s : X: %d, Y: %d, Angle: %d", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Position changed", p.X, p.Y, p.Angle)
+		return nil
+	} else {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
+		return err
+	}
+
 }
 
 //SetSpeed of the Robot
 func (robot *Robot) SetSpeed(speed int16) error {
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_SET_SPEED,
-			Val1:    speed,
-			Val2:    0,
-			Val3:    0,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("SetSpeed Error!")
+	motionCMD := models.MotionCommand{
+		CMD:     models.MC_SET_SPEED,
+		PARAM_1: speed,
+	}
+
+	err := robot.Connection.SendData(motionCMD, ID_MOTION_CMD)
+
+	if err != nil {
+		log.Printf("[%s] %s : Speed: %d", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Set Speed", speed)
+		return nil
+	} else {
 		return err
 	}
-	robot.Speed = speed
-	printInfo("Speed setted at " + strconv.Itoa(int(speed)))
-	return nil
 }
 
 //ForwardDistance move the robot about the given millimeters
 func (robot *Robot) ForwardDistance(distance int16) error {
 
-	if robot.Stopped {
-		printError("The robot id Stopped")
-		return errors.New("The robot id Stopped")
-	}
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_FW_DISTANCE,
-			Val1:    distance,
-			Val2:    0,
-			Val3:    0,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("ForwardDistance Error!")
-		return err
+	// if robot.Stopped {
+	// 	printError("The robot id Stopped")
+	// 	return errors.New("The robot id Stopped")
+	// }
+
+	motionCMD := models.MotionCommand{
+		CMD:     models.MC_FW_TO_DISTANCE,
+		PARAM_1: distance,
 	}
 
-	printInfo("Moved by " + strconv.Itoa(int(distance)))
-	return nil
+	err := robot.Connection.SendData(motionCMD, ID_MOTION_CMD)
+
+	if err != nil {
+		log.Printf("[%s] %s : Distance: %d", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Forward Distance", distance)
+		return nil
+	} else {
+		return err
+	}
+}
+
+func (robot *Robot) StopMotors() error {
+
+	motionCMD := models.MotionCommand{
+		CMD: models.MC_STOP,
+	}
+
+	err := robot.Connection.SendData(motionCMD, ID_MOTION_CMD)
+
+	if err == nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Motors Stopped")
+		return nil
+	} else {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
+		return err
+	}
 }
 
 //ForwardToPoint move the robot to the defined point
 func (robot *Robot) ForwardToPoint(x int16, y int16) error {
 
-	if robot.Stopped {
-		printError("The robot id Stopped")
-		return errors.New("The robot id Stopped")
-	}
+	// if robot.Stopped {
+	// 	printError("The robot id Stopped")
+	// 	return errors.New("The robot id Stopped")
+	// }
 
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_FW_POINT,
-			Val1:    x,
-			Val2:    y,
-			Val3:    0,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("ForwardToPoint Error!")
-		return err
-	}
-	printInfo("Moved to X:" + strconv.Itoa(int(x)) + " Y:" + strconv.Itoa(int(y)))
+	// if err := robot.Connection.SendData(
+	// 	models.I2CMessage{
+	// 		Command: REG_FW_POINT,
+	// 		Val1:    x,
+	// 		Val2:    y,
+	// 		Val3:    0,
+	// 		End:     0,
+	// 	},
+	// 	0x60); err != nil {
+	// 	printError("ForwardToPoint Error!")
+	// 	return err
+	// }
+	// printInfo("Moved to X:" + strconv.Itoa(int(x)) + " Y:" + strconv.Itoa(int(y)))
 	return nil
 }
 
 //RelativeRotation rotate the robot about the given degrees
 func (robot *Robot) RelativeRotation(degree int16) error {
 
-	if robot.Stopped {
-		printError("The robot id Stopped")
-		return errors.New("The robot id Stopped")
-	}
+	// if robot.Stopped {
+	// 	printError("The robot id Stopped")
+	// 	return errors.New("The robot id Stopped")
+	// }
 
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_REL_ROTATION,
-			Val1:    degree,
-			Val2:    0,
-			Val3:    0,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("RelativeRotation Error!")
-		return err
-	}
-	printInfo("Relative Rotated by " + strconv.Itoa(int(degree)))
+	// if err := robot.Connection.SendData(
+	// 	models.I2CMessage{
+	// 		Command: REG_REL_ROTATION,
+	// 		Val1:    degree,
+	// 		Val2:    0,
+	// 		Val3:    0,
+	// 		End:     0,
+	// 	},
+	// 	0x60); err != nil {
+	// 	printError("RelativeRotation Error!")
+	// 	return err
+	// }
+	// printInfo("Relative Rotated by " + strconv.Itoa(int(degree)))
 	return nil
 }
 
 //AbsoluteRotation rotate the robot about the given degrees
 func (robot *Robot) AbsoluteRotation(degree int16) error {
 
-	if robot.Stopped {
-		printError("The robot id Stopped")
-		return errors.New("The robot id Stopped")
-	}
+	// if robot.Stopped {
+	// 	printError("The robot id Stopped")
+	// 	return errors.New("The robot id Stopped")
+	// }
 
-	if err := robot.Connection.SendData(
-		models.I2CMessage{
-			Command: REG_ABS_ROTATION,
-			Val1:    degree,
-			Val2:    0,
-			Val3:    0,
-			End:     0,
-		},
-		0x60); err != nil {
-		printError("AbsoluteRotation Error!")
-		return err
-	}
+	// if err := robot.Connection.SendData(
+	// 	models.I2CMessage{
+	// 		Command: REG_ABS_ROTATION,
+	// 		Val1:    degree,
+	// 		Val2:    0,
+	// 		Val3:    0,
+	// 		End:     0,
+	// 	},
+	// 	0x60); err != nil {
+	// 	printError("AbsoluteRotation Error!")
+	// 	return err
+	// }
 
 	return nil
 }
