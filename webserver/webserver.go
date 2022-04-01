@@ -86,6 +86,8 @@ func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	apiGroup.POST("/robot/rotate/absolute", func(context *gin.Context) { robotAbsoluteRotation(context) })
 
 	apiGroup.POST("/robot/motors/stop", func(context *gin.Context) { sendStop(context) })
+	apiGroup.POST("/robot/st/align", func(context *gin.Context) { robotAlign(context) })
+	apiGroup.POST("/robot/st/starter", func(context *gin.Context) { robotStarterToggle(context) })
 
 	//apiGroup.GET("/system", func(context *gin.Context) { getSystemInformation(context) })
 
@@ -249,6 +251,46 @@ func robotForwardDistance(context *gin.Context) {
 		context.JSON(http.StatusBadRequest, gin.H{"error": err})
 	}
 
+}
+
+func robotAlign(context *gin.Context) {
+
+	var json map[string]int16
+	//value, _ := c.Request.GetBody()
+	//fmt.Print(value)
+
+	err := context.ShouldBindJSON(&json)
+	if err == nil {
+		errRobot := robotInstance.Align(uint8(json["color"]))
+		if errRobot != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": errRobot})
+		} else {
+			context.JSON(http.StatusOK, gin.H{"error": false})
+		}
+	} else {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err})
+	}
+
+}
+
+func robotStarterToggle(context *gin.Context) {
+
+	var json map[string]interface{}
+	//value, _ := c.Request.GetBody()
+	//fmt.Print(value)
+
+	err := context.BindJSON(&json)
+	if err == nil {
+		var enb bool = json["enable"].(bool)
+		errRobot := robotInstance.ToggleStarter(enb)
+		if errRobot != nil {
+			context.JSON(http.StatusInternalServerError, gin.H{"error": errRobot})
+		} else {
+			context.JSON(http.StatusOK, gin.H{"error": false})
+		}
+	} else {
+		context.JSON(http.StatusBadRequest, gin.H{"error": err})
+	}
 }
 
 func robotForwardPoint(context *gin.Context) {

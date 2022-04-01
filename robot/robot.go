@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"log"
+	"os"
 
 	"github.com/arslab/robot_controller/models"
 	"github.com/arslab/robot_controller/utilities"
@@ -23,11 +24,6 @@ const (
 	ID_OBST_MAP             = 0x70f
 )
 
-const (
-	ST_CMD_ALIGN_PICCOLO = 0x03
-	ST_CMD_ALIGN_GRANDE  = 0x01
-)
-
 //Robot rappresents the logical Robot
 type Robot struct {
 	Connection             Connection
@@ -37,6 +33,9 @@ type Robot struct {
 	Speed                  int16
 	Stopped                bool
 	CallbackPositionUpdate func(pos models.Position)
+	Type                   string
+	Color                  uint8
+	StarterEnabled         bool
 }
 
 //NewRobot return a new Robot instance
@@ -51,6 +50,7 @@ func NewRobot(networkInterface string) (*Robot, error) {
 		StartPosition:       models.Position{X: -1000, Y: -1000, Angle: -1000},
 		Speed:               0,
 		Stopped:             false,
+		Type:                os.Getenv("ROBOT"),
 	}
 
 	if connError := robot.Connection.Init(); connError != nil {
@@ -63,7 +63,7 @@ func NewRobot(networkInterface string) (*Robot, error) {
 	go func() {
 		robot.Connection.Connect()
 	}()
-
+	log.Printf("Controller for robot %s started.", robot.Type)
 	//robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
 	return &robot, nil
 }
@@ -135,8 +135,8 @@ func (robot *Robot) onDataReceived(frm can.Frame) {
 			log.Printf("%s : Number: [%d], Valid: [%d], AStart: [%d], AEnd: [%d], Distance: [%d]\n", "Obstacle map", obstacle_number, valid, angleStart, angleEnd, distance)
 		}
 
-	default:
-		log.Printf("%s : [%x]\n", "UNKNOWN ID CAN", frm.ID)
+		//default:
+		//	log.Printf("%s : [%x]\n", "UNKNOWN ID CAN", frm.ID)
 	}
 
 }
@@ -304,6 +304,57 @@ func (robot *Robot) StopMotors() error {
 
 	if err == nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Motors Stopped")
+		return nil
+	} else {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
+		return err
+	}
+}
+
+func (robot *Robot) Align(colorIn uint8) error {
+	var cmd uint8
+	if robot.Type == "piccolo" {
+		cmd = models.ST_ALIGN_PICCOLO
+	} else {
+		cmd = models.ST_ALIGN_GRANDE
+	}
+
+	robot.Color = colorIn
+
+	motionCMD := models.StrategyCommand{
+		CMD:   cmd,
+		FLAGS: colorIn,
+	}
+
+	err := robot.Connection.SendData(motionCMD, ID_ST_CMD)
+
+	if err == nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Aligning")
+		return nil
+	} else {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
+		return err
+	}
+}
+
+func (robot *Robot) ToggleStarter(enable bool) error {
+	var cmd uint8
+	if enable {
+		cmd = models.ST_ENABLE_STARTER
+	} else {
+		cmd = models.ST_DISABLE_STARTER
+	}
+
+	robot.StarterEnabled = enable
+
+	motionCMD := models.StrategyCommand{
+		CMD: cmd,
+	}
+
+	err := robot.Connection.SendData(motionCMD, ID_ST_CMD)
+
+	if err == nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Aligning")
 		return nil
 	} else {
 		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
