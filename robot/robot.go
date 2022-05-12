@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log"
 	"os"
+	"os/exec"
 	"time"
 
 	"github.com/arslab/robot_controller/models"
@@ -372,6 +373,17 @@ func (robot *Robot) ToggleStarter(enable bool) error {
 		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
 		return err
 	}
+}
+
+func (robot *Robot) ResetBoard() error {
+
+	_, err := exec.Command("openocd", "-f board/st_nucleo_f4.cfg -c init -c reset -c exit").Output()
+	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Board Reset")
+	if err != nil {
+		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
+		return err
+	}
+	return nil
 }
 
 //ForwardToPoint move the robot to the defined point

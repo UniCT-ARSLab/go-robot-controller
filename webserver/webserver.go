@@ -130,6 +130,11 @@ func getRobotBattery(context *gin.Context) {
 	context.JSON(http.StatusOK, percent)
 }
 
+func resetRobotcontext *gin.Context(){
+	robotInstance.ResetBoard()
+	context.JSON(http.StatusOK)
+}
+
 func setRobotPosition(context *gin.Context) {
 
 	var position map[string]int16
