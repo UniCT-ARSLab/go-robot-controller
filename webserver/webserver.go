@@ -89,6 +89,8 @@ func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	apiGroup.POST("/robot/st/align", func(context *gin.Context) { robotAlign(context) })
 	apiGroup.POST("/robot/st/starter", func(context *gin.Context) { robotStarterToggle(context) })
 
+	apiGroup.GET("/robot/battery", func(context *gin.Context) { getRobotBattery(context) })
+
 	//apiGroup.GET("/system", func(context *gin.Context) { getSystemInformation(context) })
 
 	router.GET("/socket.io/*any", gin.WrapH(serverSocket))
@@ -114,68 +116,18 @@ func (ws *WebServer) Start() {
 		log.Fatal(err.Error())
 	}()
 
-	go func() {
-		for {
-			//ws.listenInputChannel()
-		}
-	}()
 }
-
-/*
-
-func (ws *WebServer) listenInputChannel() {
-
-	select {
-	case resp := <-ws.InputChannel:
-		if serviceData, exists := (*ws.ServiceMap)[resp.ServiceName]; exists {
-			//service exists
-			protocolExists := false
-			sendToWs := false
-
-			for i := 0; i < len(serviceData.Protocols); i++ {
-				protocolData := &serviceData.Protocols[i]
-				if protocolData.Protocol.Type == resp.Protocol.Type && protocolData.Protocol.Server == resp.Protocol.Server && protocolData.Protocol.Port == resp.Protocol.Port {
-
-					if protocolData.Err != nil && resp.Error != nil {
-						if protocolData.Err.Error() != resp.Error.Error() {
-							protocolData.Err = resp.Error
-							sendToWs = true
-						}
-					} else {
-						if protocolData.Err != resp.Error {
-							protocolData.Err = resp.Error
-							sendToWs = true
-						}
-					}
-					protocolExists = true
-				}
-
-			}
-
-			if !protocolExists {
-				serviceData.Protocols = append(serviceData.Protocols, data.ProtocolData{
-					Protocol: resp.Protocol,
-					Err:      resp.Error,
-				})
-
-			}
-
-			if sendToWs {
-				ws.ServerSocket.BroadcastToRoom("/", ROOM_SERVICES_LISTENERS, EVENT_SERVICE_CHANGE, serviceData)
-			}
-
-			(*ws.ServiceMap)[resp.ServiceName] = serviceData
-
-		}
-	}
-
-}
-*/
 
 func getRobotPosition(context *gin.Context) {
 
 	postion := robotInstance.GetPosition()
 	context.JSON(http.StatusOK, postion)
+}
+
+func getRobotBattery(context *gin.Context) {
+	time := robotInstance.TimerBattery
+	percent := (time / 1200)
+	context.JSON(http.StatusOK, percent)
 }
 
 func setRobotPosition(context *gin.Context) {
@@ -390,7 +342,7 @@ func NewMelodyWebSocket() *melody.Melody {
 		log.Printf("[%s] %s", utilities.CreateColorString("WEB SOCKET", color.FgHiMagenta), "Client connected!")
 
 		go func() {
-			for true {
+			for {
 				if s.IsClosed() {
 					//log.Printf("[%s] %s", utilities.CreateColorString("WEB SOCKET", color.FgHiMagenta), "Session closed!")
 					return

@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"log"
 	"os"
+	"time"
 
 	"github.com/arslab/robot_controller/models"
 	"github.com/arslab/robot_controller/utilities"
@@ -36,6 +37,7 @@ type Robot struct {
 	Type                   string
 	Color                  uint8
 	StarterEnabled         bool
+	TimerBattery           int16
 }
 
 //NewRobot return a new Robot instance
@@ -51,6 +53,7 @@ func NewRobot(networkInterface string) (*Robot, error) {
 		Speed:               0,
 		Stopped:             false,
 		Type:                os.Getenv("ROBOT"),
+		TimerBattery:        1200,
 	}
 
 	if connError := robot.Connection.Init(); connError != nil {
@@ -63,6 +66,15 @@ func NewRobot(networkInterface string) (*Robot, error) {
 	go func() {
 		robot.Connection.Connect()
 	}()
+
+	go func() {
+
+		for robot.TimerBattery > 0 {
+			time.Sleep(time.Second)
+			robot.TimerBattery--
+		}
+	}()
+
 	log.Printf("Controller for robot %s started.", robot.Type)
 	//robot.SetPosition(models.Position{X: 0, Y: 0, Angle: 0})
 	return &robot, nil
