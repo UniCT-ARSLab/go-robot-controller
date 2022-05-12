@@ -126,7 +126,7 @@ func getRobotPosition(context *gin.Context) {
 
 func getRobotBattery(context *gin.Context) {
 	time := robotInstance.TimerBattery
-	percent := (time / 1200.0)
+	percent := (float64(time) / float64(1200.0))
 	context.JSON(http.StatusOK, percent)
 }
 
