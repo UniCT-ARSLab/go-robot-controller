@@ -366,7 +366,7 @@ func (robot *Robot) ToggleStarter(enable bool) error {
 	err := robot.Connection.SendData(motionCMD, ID_ST_CMD)
 
 	if err == nil {
-		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Aligning")
+		log.Printf("[%s] %s %t", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Starter Toggled", enable)
 		return nil
 	} else {
 		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
