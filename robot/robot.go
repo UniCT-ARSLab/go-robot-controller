@@ -377,7 +377,7 @@ func (robot *Robot) ToggleStarter(enable bool) error {
 
 func (robot *Robot) ResetBoard() error {
 
-	_, err := exec.Command("openocd", "-f board/st_nucleo_f4.cfg -c init -c reset -c exit").Output()
+	_, err := exec.Command("openocd", "-f", "board/st_nucleo_f4.cfg", "-c", "init", "-c", "reset", "-c", "exit").Output()
 	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), "Board Reset")
 	if err != nil {
 		log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiRed), err)
