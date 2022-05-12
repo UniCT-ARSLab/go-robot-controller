@@ -90,6 +90,7 @@ func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	apiGroup.POST("/robot/st/starter", func(context *gin.Context) { robotStarterToggle(context) })
 
 	apiGroup.GET("/robot/battery", func(context *gin.Context) { getRobotBattery(context) })
+	apiGroup.GET("/robot/reset", func(context *gin.Context) { resetRobotcontext(context) })
 
 	//apiGroup.GET("/system", func(context *gin.Context) { getSystemInformation(context) })
 
@@ -130,9 +131,9 @@ func getRobotBattery(context *gin.Context) {
 	context.JSON(http.StatusOK, percent)
 }
 
-func resetRobotcontext *gin.Context(){
+func resetRobotcontext(context *gin.Context) {
 	robotInstance.ResetBoard()
-	context.JSON(http.StatusOK)
+	context.JSON(http.StatusOK, gin.H{"error": false})
 }
 
 func setRobotPosition(context *gin.Context) {
