@@ -143,9 +143,8 @@ func (conn *Connection) SendData(payload interface{}, id uint32) error {
 	if err != nil {
 		log.Println("Errore nella publish")
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		conn.Disconnect()
-		conn.Connect()
-		return conn.SendData(payload, id)
+
+		return err
 	}
 
 	return nil

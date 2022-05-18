@@ -19,6 +19,8 @@ func main() {
 	signal.Notify(c, os.Interrupt)
 	signal.Notify(c, os.Kill)
 
+	time.Sleep(time.Second * 3)
+
 	robot, err := robot.NewRobot("can0")
 	if err != nil {
 		os.Exit(1)
