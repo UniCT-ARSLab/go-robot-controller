@@ -96,6 +96,7 @@ func (conn *Connection) Init() error {
 
 		select {
 		case <-c:
+			log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiYellow), "Connection Closed on Interface:"+conn.Interface)
 			conn.Bus.Disconnect()
 			os.Exit(1)
 		}
@@ -103,6 +104,10 @@ func (conn *Connection) Init() error {
 
 	log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgYellow), "Connection Initialised on Interface:"+conn.Interface)
 	return nil
+}
+
+func (conn *Connection) Disconnect() {
+	conn.Bus.Disconnect()
 }
 
 func (conn *Connection) Connect() {
@@ -136,8 +141,11 @@ func (conn *Connection) SendData(payload interface{}, id uint32) error {
 	}
 	err = conn.Bus.Publish(frm)
 	if err != nil {
+		log.Println("Errore nella publish")
 		log.Printf("[%s] %s", utilities.CreateColorString("CONNECTION", color.FgHiRed), err)
-		return err
+		conn.Disconnect()
+		conn.Connect()
+		return conn.SendData(payload, id)
 	}
 
 	return nil

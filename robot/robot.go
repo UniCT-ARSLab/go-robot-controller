@@ -54,7 +54,7 @@ func NewRobot(networkInterface string) (*Robot, error) {
 		Speed:               0,
 		Stopped:             false,
 		Type:                os.Getenv("ROBOT"),
-		TimerBattery:        1200,
+		TimerBattery:        25 * 60,
 	}
 
 	if connError := robot.Connection.Init(); connError != nil {
@@ -245,7 +245,7 @@ func (robot *Robot) GetPosition() models.Position {
 // 	return nil
 // }
 
-//SetPosition set the position on the I2C board
+//SetPosition set the position on the can bus
 func (robot *Robot) SetPosition(p models.Position) error {
 
 	motionCMD := models.MotionCommand{
