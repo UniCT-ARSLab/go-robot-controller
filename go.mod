@@ -1,4 +1,4 @@
-module github.com/arslab/robot_controller
+module github.com/unict-arslab/go-robot-controller
 
 go 1.15
 

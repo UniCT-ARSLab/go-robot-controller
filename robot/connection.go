@@ -12,12 +12,12 @@ import (
 
 	//"time"
 
-	"github.com/arslab/robot_controller/utilities"
 	"github.com/brutella/can"
 	"github.com/fatih/color"
+	"github.com/unict-arslab/go-robot-controller/utilities"
 )
 
-//Connection is the interface between the logical Robot and the i2C Bus
+// Connection is the interface between the logical Robot and the i2C Bus
 type Connection struct {
 	Interface string
 	Bus       *can.Bus
@@ -63,7 +63,7 @@ type Connection struct {
 // 	//log.Printf("%-3s %-4x %-3s % -24X '%s'\n", "can0", frm.ID, length, data, printableString(data[:]))
 // }
 
-//NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
+// NewConnection return a new I2C Connection specifying the GPIO Pin and the Address of the device
 func NewConnection(networkInterface string) *Connection {
 
 	bus, err := can.NewBusForInterfaceWithName(networkInterface)
@@ -85,7 +85,7 @@ func (conn *Connection) OnReceiveCallback(cb func(data can.Frame)) {
 	conn.Bus.SubscribeFunc(conn.OnReceive)
 }
 
-//Init initialise the CAN connection
+// Init initialise the CAN connection
 func (conn *Connection) Init() error {
 
 	c := make(chan os.Signal)
@@ -116,7 +116,7 @@ func (conn *Connection) Connect() {
 	}()
 }
 
-//SendData allows to send data through the bus
+// SendData allows to send data through the bus
 func (conn *Connection) SendData(payload interface{}, id uint32) error {
 
 	buf := new(bytes.Buffer)

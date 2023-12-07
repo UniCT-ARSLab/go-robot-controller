@@ -7,10 +7,10 @@ import (
 	"os/signal"
 	"time"
 
-	//"github.com/arslab/robot_controller/robot"
+	//"github.com/unict-arslab/go-robot-controller/robot"
 
-	"github.com/arslab/robot_controller/robot"
-	"github.com/arslab/robot_controller/webserver"
+	"github.com/unict-arslab/go-robot-controller/robot"
+	"github.com/unict-arslab/go-robot-controller/webserver"
 )
 
 func main() {
