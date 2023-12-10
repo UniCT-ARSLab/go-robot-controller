@@ -16,7 +16,8 @@ import (
 	"github.com/unict-arslab/go-robot-controller/models"
 	"github.com/unict-arslab/go-robot-controller/robot"
 	"github.com/unict-arslab/go-robot-controller/utilities"
-	_ "github.com/unict-arslab/go-robot-controller/webserver/statik" //static file system
+
+	// _ "github.com/unict-arslab/go-robot-controller/webserver/statik" //static file system
 	"gopkg.in/olahol/melody.v1"
 )
 
