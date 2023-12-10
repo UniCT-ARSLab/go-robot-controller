@@ -8,19 +8,20 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/arslab/robot_controller/models"
-	"github.com/arslab/robot_controller/robot"
-	"github.com/arslab/robot_controller/utilities"
-	_ "github.com/arslab/robot_controller/webserver/statik" //static file system
 	"github.com/fatih/color"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	socketio "github.com/googollee/go-socket.io"
 	"github.com/rakyll/statik/fs"
+	"github.com/unict-arslab/go-robot-controller/models"
+	"github.com/unict-arslab/go-robot-controller/robot"
+	"github.com/unict-arslab/go-robot-controller/utilities"
+
+	// _ "github.com/unict-arslab/go-robot-controller/webserver/statik" //static file system
 	"gopkg.in/olahol/melody.v1"
 )
 
-//WebServer reppresents the WebServer and WebScoket server instance
+// WebServer reppresents the WebServer and WebScoket server instance
 type WebServer struct {
 	Address       string
 	Port          int
@@ -32,7 +33,7 @@ type WebServer struct {
 
 var robotInstance *robot.Robot
 
-//NewWebServer returns a new WebServer
+// NewWebServer returns a new WebServer
 func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	robotInstance = robot
 	serverSocket := newServerSocket()
@@ -109,7 +110,7 @@ func NewWebServer(robot *robot.Robot, address string, port int) *WebServer {
 	return &ws
 }
 
-//Start starts the WebServer
+// Start starts the WebServer
 func (ws *WebServer) Start() {
 	go func() {
 		log.Printf("[%s] %s", utilities.CreateColorString("WEB SERVER", color.FgHiBlue), "Avaiable on port:"+strconv.Itoa(ws.Port))
@@ -338,7 +339,7 @@ func newServerSocket() *socketio.Server {
 	return serverSocket
 }
 
-//NewMelodyWebSocket return melody server
+// NewMelodyWebSocket return melody server
 func NewMelodyWebSocket() *melody.Melody {
 
 	server := melody.New()
@@ -389,12 +390,12 @@ func NewMelodyWebSocket() *melody.Melody {
 	return server
 }
 
-//ManageWebSocketMessages manage the websocket and socket.io messages
+// ManageWebSocketMessages manage the websocket and socket.io messages
 func ManageWebSocketMessages(msg models.WebSocketMessage) {
 
 }
 
-//GinMiddleware manage the cors
+// GinMiddleware manage the cors
 func GinMiddleware(allowOrigin string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", allowOrigin)

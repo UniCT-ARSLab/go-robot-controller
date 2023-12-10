@@ -8,25 +8,26 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/arslab/robot_controller/models"
-	"github.com/arslab/robot_controller/utilities"
 	"github.com/brutella/can"
 	"github.com/fatih/color"
+	"github.com/unict-arslab/go-robot-controller/models"
+	"github.com/unict-arslab/go-robot-controller/utilities"
 )
 
-const DEBUG_CAN = false
+const DEBUG_CAN = true
 
 const (
 	ID_ROBOT_POSITION       = 0x3E3
 	ID_OTHER_ROBOT_POSITION = 0x3E5
 	ID_ROBOT_SPEED          = 0x3E4
 	ID_ROBOT_STATUS         = 0x402
+	ID_DISTANCE_SENSOR      = 0x670
 	ID_MOTION_CMD           = 0x7F0
 	ID_ST_CMD               = 0x710
 	ID_OBST_MAP             = 0x70f
 )
 
-//Robot rappresents the logical Robot
+// Robot rappresents the logical Robot
 type Robot struct {
 	Connection             Connection
 	StartPositionSetted    bool
@@ -41,7 +42,7 @@ type Robot struct {
 	TimerBattery           int16
 }
 
-//NewRobot return a new Robot instance
+// NewRobot return a new Robot instance
 func NewRobot(networkInterface string) (*Robot, error) {
 
 	conn := NewConnection(networkInterface)
@@ -127,6 +128,24 @@ func (robot *Robot) onDataReceived(frm can.Frame) {
 		if DEBUG_CAN {
 			log.Printf("%s : [%d]\n", "Status", status)
 		}
+	case ID_DISTANCE_SENSOR:
+
+		// 	typedef struct {
+		// 		unsigned char sensor;
+		// 		unsigned short distance;
+		// 		unsigned char alarm;
+		// 		char padding[4];
+		// }  __attribute__((packed)) t_can_distance_sensor_new_data;
+
+		var distance int16
+
+		buf := bytes.NewBuffer(data[1:3])
+		binary.Read(buf, binary.LittleEndian, &distance)
+
+		if DEBUG_CAN {
+			log.Printf("### %s : [distance : %d]\n", "ToF", distance)
+		}
+
 	case ID_OBST_MAP:
 		var obstacle_number uint8
 		var valid uint8
@@ -162,12 +181,12 @@ func printInfo(s string) {
 	log.Printf("[%s] %s", utilities.CreateColorString("ROBOT", color.FgHiCyan), s)
 }
 
-//SetCallbackUpadetePosition set the callback position update function
+// SetCallbackUpadetePosition set the callback position update function
 func (robot *Robot) SetCallbackUpadetePosition(cb func(position models.Position)) {
 	robot.CallbackPositionUpdate = cb
 }
 
-//GetPosition returns the position of the Robot
+// GetPosition returns the position of the Robot
 func (robot *Robot) GetPosition() models.Position {
 
 	return robot.Position
@@ -245,7 +264,7 @@ func (robot *Robot) GetPosition() models.Position {
 // 	return nil
 // }
 
-//SetPosition set the position on the can bus
+// SetPosition set the position on the can bus
 func (robot *Robot) SetPosition(p models.Position) error {
 
 	motionCMD := models.MotionCommand{
@@ -267,7 +286,7 @@ func (robot *Robot) SetPosition(p models.Position) error {
 
 }
 
-//SetSpeed of the Robot
+// SetSpeed of the Robot
 func (robot *Robot) SetSpeed(speed int16) error {
 	motionCMD := models.MotionCommand{
 		CMD:     models.MC_SET_SPEED,
@@ -284,7 +303,7 @@ func (robot *Robot) SetSpeed(speed int16) error {
 	}
 }
 
-//ForwardDistance move the robot about the given millimeters
+// ForwardDistance move the robot about the given millimeters
 func (robot *Robot) ForwardDistance(distance int16) error {
 
 	// if robot.Stopped {
@@ -386,7 +405,7 @@ func (robot *Robot) ResetBoard() error {
 	return nil
 }
 
-//ForwardToPoint move the robot to the defined point
+// ForwardToPoint move the robot to the defined point
 func (robot *Robot) ForwardToPoint(x int16, y int16) error {
 
 	// if robot.Stopped {
@@ -410,7 +429,7 @@ func (robot *Robot) ForwardToPoint(x int16, y int16) error {
 	return nil
 }
 
-//RelativeRotation rotate the robot about the given degrees
+// RelativeRotation rotate the robot about the given degrees
 func (robot *Robot) RelativeRotation(degree int16) error {
 
 	// if robot.Stopped {
@@ -434,7 +453,7 @@ func (robot *Robot) RelativeRotation(degree int16) error {
 	return nil
 }
 
-//AbsoluteRotation rotate the robot about the given degrees
+// AbsoluteRotation rotate the robot about the given degrees
 func (robot *Robot) AbsoluteRotation(degree int16) error {
 
 	// if robot.Stopped {
